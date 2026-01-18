@@ -1,0 +1,49 @@
+# OpenWrt build artifacts
+bin/
+dl/
+staging_dir/
+tmp/
+.build/
+
+# Config files (uncomment if you don't want to track .config)
+# .config
+
+# Compiled binaries
+*.bin
+*.img
+*.tar.gz
+*.trx
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Git files
+.commitHash
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
