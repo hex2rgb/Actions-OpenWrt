@@ -43,22 +43,30 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
+        df -hT
+        echo "=== Cleaning up disk space ==="
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
         sudo docker image prune --all --force
+        sudo rm -rf /usr/local/share/boost /usr/local/share/chromium /usr/local/share/powershell
+        sudo rm -rf /opt/hostedtoolcache/* /opt/microsoft /opt/pipx
+        sudo rm -rf /usr/share/swift /usr/share/miniconda
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
+        sudo rm -rf /var/lib/apt/lists/*
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
+        df -hT
 
     - name: Clone source code
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        df -hT $PWD
 
     - name: Load custom feeds
       run: |
@@ -86,16 +94,30 @@ jobs:
       run: |
         cd openwrt
         make defconfig
+        df -hT
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
+        df -hT
 
     - name: Compile the firmware
       id: compile
       run: |
         cd openwrt
+        df -hT
         echo -e "$(nproc) thread compile"
+        # Clean up build logs and old files before compile
+        find . -name "*.o" -delete 2>/dev/null || true
+        find . -name "*.a" -delete 2>/dev/null || true
+        # Disable ccache to save space
+        export CCACHE_DIR=""
         make -j$(nproc) || make -j1 || make -j1 V=s
+        # Clean up after compilation to save space
+        rm -rf staging_dir tmp/dl tmp/info tmp/package-* tmp/.config-package.in tmp/.packageinfo
+        find . -name "*.o" -delete 2>/dev/null || true
+        find . -name "*.a" -delete 2>/dev/null || true
+        find . -name ".built" -delete 2>/dev/null || true
+        df -hT
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
@@ -118,6 +140,9 @@ jobs:
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
+        # Clean up more to save space
+        find . -name "*.ipk" -delete 2>/dev/null || true
+        df -hT
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
 
