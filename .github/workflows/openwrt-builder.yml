@@ -76,10 +76,17 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
     - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      run: |
+        cd openwrt
+        df -hT
+        ./scripts/feeds update -a
+        df -hT
 
     - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a
+      run: |
+        cd openwrt
+        ./scripts/feeds install -a
+        df -hT
 
     - name: Load custom configuration
       run: |
@@ -95,13 +102,18 @@ jobs:
         cd openwrt
         make defconfig
         df -hT
-        make download -j8
+        # Download packages with retry mechanism
+        make download -j8 || make download -j4 || make download -j1
+        # Clean up corrupted downloads
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
+        # Retry failed downloads
+        make download -j8 || true
         df -hT
 
     - name: Compile the firmware
       id: compile
+      timeout-minutes: 300
       run: |
         cd openwrt
         df -hT
@@ -111,12 +123,17 @@ jobs:
         find . -name "*.a" -delete 2>/dev/null || true
         # Disable ccache to save space
         export CCACHE_DIR=""
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        # Set build options for stability
+        export FORCE_UNSAFE_CONFIGURE=1
+        # Compile with progressive fallback
+        make -j$(nproc) || make -j$(( $(nproc) / 2 )) || make -j1 || make -j1 V=s
         # Clean up after compilation to save space
         rm -rf staging_dir tmp/dl tmp/info tmp/package-* tmp/.config-package.in tmp/.packageinfo
         find . -name "*.o" -delete 2>/dev/null || true
         find . -name "*.a" -delete 2>/dev/null || true
         find . -name ".built" -delete 2>/dev/null || true
+        # Clean build logs
+        find . -name "*.log" -size +10M -delete 2>/dev/null || true
         df -hT
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
@@ -139,9 +156,12 @@ jobs:
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
         cd openwrt/bin/targets/*/*
+        # Remove packages directory to save space
         rm -rf packages
-        # Clean up more to save space
+        # Clean up IPK files if not needed
         find . -name "*.ipk" -delete 2>/dev/null || true
+        # Keep only essential firmware files
+        find . -type f ! -name "*.bin" ! -name "*.img" ! -name "*.gz" ! -name "*.trx" ! -name "*.tar" ! -name "*.manifest" ! -name "sha256sums" -delete 2>/dev/null || true
         df -hT
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
