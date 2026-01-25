@@ -12,7 +12,7 @@
 
 # Add feed sources for required packages
 # Passwall feed (contains xray, hysteria2, hysteria, and more)
-echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 
 # Helloworld feed (alternative/additional packages)
 echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
